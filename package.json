@@ -2,6 +2,22 @@
   "name": "stackboi",
   "version": "0.1.2",
   "description": "A stacked branch workflow tool",
+  "keywords": [
+    "cli",
+    "git",
+    "stacked-branches",
+    "workflow"
+  ],
+  "homepage": "https://github.com/0xrohan10/stackboi#readme",
+  "bugs": {
+    "url": "https://github.com/0xrohan10/stackboi/issues"
+  },
+  "license": "GPL-3.0",
+  "author": "0xrohan10",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xrohan10/stackboi.git"
+  },
   "bin": {
     "sb": "dist/cli.js"
   },
@@ -47,5 +63,8 @@
     "@0xrohan10/stackboi-linux-arm64": "0.1.2",
     "@0xrohan10/stackboi-linux-x64": "0.1.2",
     "@0xrohan10/stackboi-win32-x64": "0.1.2"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

@@ -1,14 +1,11 @@
 {
-  "name": "@stackboi/darwin-x64",
+  "name": "@0xrohan10/stackboi-darwin-x64",
   "version": "0.1.2",
-  "description": "sb binary for darwin-x64",
-  "license": "MIT",
+  "description": "stackboi binary for darwin-x64",
+  "license": "GPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/stackboi/stackboi"
-  },
-  "bin": {
-    "sb": "./sb"
+    "url": "https://github.com/0xrohan10/stackboi"
   },
   "os": [
     "darwin"
