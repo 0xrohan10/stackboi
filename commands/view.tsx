@@ -23,6 +23,29 @@ export type SyncState =
   | "success"
   | "error";
 
+// Push operation state
+export type PushState =
+  | "idle"
+  | "pushing"
+  | "success"
+  | "error";
+
+export interface BranchPushResult {
+  branchName: string;
+  success: boolean;
+  error?: string;
+  setUpstream: boolean;
+}
+
+export interface PushProgress {
+  state: PushState;
+  message: string;
+  stackName: string;
+  branches: string[];
+  currentBranch: string | null;
+  results: BranchPushResult[];
+}
+
 export interface SyncProgress {
   state: SyncState;
   message: string;
@@ -589,6 +612,97 @@ export async function performSync(
   return { success: true };
 }
 
+// Check if a branch has an upstream tracking branch
+async function hasUpstream(branchName: string): Promise<boolean> {
+  const result = await $`git rev-parse --verify origin/${branchName}`
+    .quiet()
+    .nothrow();
+  return result.exitCode === 0;
+}
+
+// Push all branches in a stack
+export async function pushAllBranches(
+  stack: Stack,
+  onProgress: (progress: PushProgress) => void
+): Promise<{ success: boolean; results: BranchPushResult[] }> {
+  const { name: stackName, branches } = stack;
+  const results: BranchPushResult[] = [];
+
+  // Initial progress
+  onProgress({
+    state: "pushing",
+    message: "Starting push...",
+    stackName,
+    branches,
+    currentBranch: null,
+    results: [],
+  });
+
+  // Push each branch in order
+  for (const branchName of branches) {
+    onProgress({
+      state: "pushing",
+      message: `Pushing ${branchName}...`,
+      stackName,
+      branches,
+      currentBranch: branchName,
+      results: [...results],
+    });
+
+    // Check if upstream exists
+    const hasUpstreamBranch = await hasUpstream(branchName);
+
+    let pushResult;
+    if (hasUpstreamBranch) {
+      // Push with --force-with-lease for safety
+      pushResult = await $`git push --force-with-lease origin ${branchName}`
+        .quiet()
+        .nothrow();
+    } else {
+      // Set upstream for new branches
+      pushResult = await $`git push --set-upstream origin ${branchName}`
+        .quiet()
+        .nothrow();
+    }
+
+    if (pushResult.exitCode === 0) {
+      results.push({
+        branchName,
+        success: true,
+        setUpstream: !hasUpstreamBranch,
+      });
+    } else {
+      const errorMsg = pushResult.stderr.toString().trim();
+      results.push({
+        branchName,
+        success: false,
+        error: errorMsg || "Push failed",
+        setUpstream: !hasUpstreamBranch,
+      });
+    }
+  }
+
+  // Calculate overall success
+  const allSucceeded = results.every((r) => r.success);
+  const successCount = results.filter((r) => r.success).length;
+  const failCount = results.filter((r) => !r.success).length;
+
+  const finalMessage = allSucceeded
+    ? `Successfully pushed all ${results.length} branch${results.length !== 1 ? "es" : ""}`
+    : `Pushed ${successCount} branch${successCount !== 1 ? "es" : ""}, ${failCount} failed`;
+
+  onProgress({
+    state: allSucceeded ? "success" : "error",
+    message: finalMessage,
+    stackName,
+    branches,
+    currentBranch: null,
+    results,
+  });
+
+  return { success: allSucceeded, results };
+}
+
 // Sync progress overlay component
 function SyncProgressOverlay({ progress }: { progress: SyncProgress }) {
   const stateIcons: Record<SyncState, string> = {
@@ -666,6 +780,101 @@ function SyncProgressOverlay({ progress }: { progress: SyncProgress }) {
       )}
     </Box>
   );
+}
+
+// Push progress overlay component
+function PushProgressOverlay({ progress }: { progress: PushProgress }) {
+  const stateIcons: Record<PushState, string> = {
+    idle: "",
+    pushing: "⬆️",
+    success: "✅",
+    error: "⚠️",
+  };
+
+  const stateColors: Record<PushState, string> = {
+    idle: "gray",
+    pushing: "cyan",
+    success: "green",
+    error: "yellow",
+  };
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={stateColors[progress.state]} padding={1}>
+      <Box marginBottom={1}>
+        <Text bold color={stateColors[progress.state]}>
+          {stateIcons[progress.state]} Pushing Stack: {progress.stackName}
+        </Text>
+      </Box>
+
+      <Box marginBottom={1}>
+        <Text>{progress.message}</Text>
+      </Box>
+
+      {progress.branches.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="gray">Branches:</Text>
+          {progress.branches.map((branch) => {
+            const result = progress.results.find((r) => r.branchName === branch);
+            const isCurrent = branch === progress.currentBranch;
+
+            let statusIcon = "  ";
+            let color = "gray";
+            let suffix = "";
+
+            if (result) {
+              if (result.success) {
+                statusIcon = "✓ ";
+                color = "green";
+                if (result.setUpstream) {
+                  suffix = " (set upstream)";
+                }
+              } else {
+                statusIcon = "✗ ";
+                color = "red";
+              }
+            } else if (isCurrent) {
+              statusIcon = "→ ";
+              color = "yellow";
+            }
+
+            return (
+              <Box key={branch} flexDirection="column">
+                <Text color={color}>
+                  {"  "}{statusIcon}{branch}{suffix}
+                </Text>
+                {result && !result.success && result.error && (
+                  <Text color="red">{"      "}{result.error}</Text>
+                )}
+              </Box>
+            );
+          })}
+        </Box>
+      )}
+
+      {(progress.state === "success" || progress.state === "error") && (
+        <Box marginTop={1}>
+          <Text color="gray">Press any key to continue...</Text>
+        </Box>
+      )}
+    </Box>
+  );
+}
+
+// Push progress dismiss handler component
+function PushProgressWithDismiss({
+  progress,
+  onDismiss,
+}: {
+  progress: PushProgress;
+  onDismiss: () => void;
+}) {
+  useInput(() => {
+    if (progress.state === "success" || progress.state === "error") {
+      onDismiss();
+    }
+  });
+
+  return <PushProgressOverlay progress={progress} />;
 }
 
 // Status indicator component
@@ -817,12 +1026,14 @@ function TreeView({
   stacks,
   currentBranch,
   onSelect,
+  onPush,
   isPolling,
   rerereStats,
 }: {
   stacks: StackWithInfo[];
   currentBranch: string;
   onSelect: (branchName: string) => void;
+  onPush: (stackIndex: number) => void;
   isPolling: boolean;
   rerereStats: RerereStats | null;
 }) {
@@ -844,6 +1055,12 @@ function TreeView({
       const item = navItems[selectedIndex];
       if (item) {
         onSelect(item.branchName);
+      }
+    } else if (input === "p") {
+      // Push all branches in the stack containing the selected branch
+      const item = navItems[selectedIndex];
+      if (item) {
+        onPush(item.stackIndex);
       }
     }
   });
@@ -869,7 +1086,7 @@ function TreeView({
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text bold>Stack Tree View</Text>
-        <Text color="gray"> (↑↓/jk: navigate, Enter: checkout, q: quit)</Text>
+        <Text color="gray"> (↑↓/jk: navigate, Enter: checkout, p: push stack, q: quit)</Text>
         {isPolling && <Text color="gray"> ⟳</Text>}
       </Box>
 
@@ -1097,6 +1314,7 @@ function App() {
   const [rerereStats, setRerereStats] = useState<RerereStats | null>(null);
   const [conflictState, setConflictState] = useState<ConflictState | null>(null);
   const [pendingNotification, setPendingNotification] = useState<MergedPRNotification | null>(null);
+  const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -1268,6 +1486,34 @@ function App() {
     setMergeNotification(null);
   };
 
+  // Handle push request for a stack
+  const handlePush = async (stackIndex: number) => {
+    const stackInfo = stacks[stackIndex];
+    if (!stackInfo) return;
+
+    await pushAllBranches(stackInfo.stack, (progress) => {
+      setPushProgress(progress);
+    });
+  };
+
+  // Handle dismissal of push progress overlay
+  const handlePushProgressDismiss = async () => {
+    const progress = pushProgress;
+    setPushProgress(null);
+
+    // Reload sync status after push (branches may now be up-to-date)
+    if (progress?.state === "success" || progress?.state === "error") {
+      try {
+        const gitRoot = await getGitRoot();
+        const config = await loadConfig(gitRoot);
+        const updatedStacks = await getStacksWithInfo(config, ghAuthenticated);
+        setStacks(updatedStacks);
+      } catch {
+        // Ignore errors during reload
+      }
+    }
+  };
+
   if (loading) {
     return <Loading />;
   }
@@ -1289,6 +1535,15 @@ function App() {
       <SyncProgressWithDismiss
         progress={syncProgress}
         onDismiss={handleSyncProgressDismiss}
+      />
+    );
+  }
+
+  if (pushProgress) {
+    return (
+      <PushProgressWithDismiss
+        progress={pushProgress}
+        onDismiss={handlePushProgressDismiss}
       />
     );
   }
@@ -1318,6 +1573,7 @@ function App() {
       stacks={stacks}
       currentBranch={currentBranch}
       onSelect={handleSelect}
+      onPush={handlePush}
       isPolling={isPolling}
       rerereStats={rerereStats}
     />
