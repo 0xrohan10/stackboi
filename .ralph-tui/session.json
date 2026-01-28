@@ -3,10 +3,10 @@
   "sessionId": "a151e077-4d21-4efb-ad9d-a5f3d204010f",
   "status": "running",
   "startedAt": "2026-01-28T21:04:10.863Z",
-  "updatedAt": "2026-01-28T21:10:47.597Z",
-  "currentIteration": 1,
+  "updatedAt": "2026-01-28T21:12:59.421Z",
+  "currentIteration": 2,
   "maxIterations": 25,
-  "tasksCompleted": 1,
+  "tasksCompleted": 2,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -23,8 +23,8 @@
       {
         "id": "US-002",
         "title": "Create new stack with initial branch",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-003",
@@ -122,6 +122,16 @@
       "durationMs": 221433,
       "startedAt": "2026-01-28T21:04:14.166Z",
       "endedAt": "2026-01-28T21:07:55.599Z"
+    },
+    {
+      "iteration": 2,
+      "status": "completed",
+      "taskId": "US-002",
+      "taskTitle": "Create new stack with initial branch",
+      "taskCompleted": true,
+      "durationMs": 170759,
+      "startedAt": "2026-01-28T21:07:56.833Z",
+      "endedAt": "2026-01-28T21:10:47.592Z"
     }
   ],
   "skippedTaskIds": [],
