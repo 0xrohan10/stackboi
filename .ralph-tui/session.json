@@ -3,10 +3,10 @@
   "sessionId": "a151e077-4d21-4efb-ad9d-a5f3d204010f",
   "status": "running",
   "startedAt": "2026-01-28T21:04:10.863Z",
-  "updatedAt": "2026-01-28T21:07:55.608Z",
-  "currentIteration": 0,
+  "updatedAt": "2026-01-28T21:10:47.597Z",
+  "currentIteration": 1,
   "maxIterations": 25,
-  "tasksCompleted": 0,
+  "tasksCompleted": 1,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -17,8 +17,8 @@
       {
         "id": "US-001",
         "title": "Initialize stack metadata storage",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-002",
@@ -112,9 +112,20 @@
       }
     ]
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 1,
+      "status": "completed",
+      "taskId": "US-001",
+      "taskTitle": "Initialize stack metadata storage",
+      "taskCompleted": true,
+      "durationMs": 221433,
+      "startedAt": "2026-01-28T21:04:14.166Z",
+      "endedAt": "2026-01-28T21:07:55.599Z"
+    }
+  ],
   "skippedTaskIds": [],
   "cwd": "/Users/rohan/Developer/projects/stackboi",
   "activeTaskIds": [],
-  "subagentPanelVisible": false
+  "subagentPanelVisible": true
 }

@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 import { init } from "./commands/init";
+import { newStack } from "./commands/new";
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -10,6 +11,11 @@ async function main() {
     case "init":
       await init();
       break;
+    case "new": {
+      const branchName = args[1];
+      await newStack({ branchName });
+      break;
+    }
     case undefined:
     case "--help":
     case "-h":
@@ -18,7 +24,8 @@ async function main() {
 Usage: stackboi <command>
 
 Commands:
-  init    Initialize stackboi in the current repository
+  init          Initialize stackboi in the current repository
+  new <branch>  Create a new stack with the given branch name
 `);
       break;
     default:
