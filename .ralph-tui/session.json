@@ -3,10 +3,10 @@
   "sessionId": "a151e077-4d21-4efb-ad9d-a5f3d204010f",
   "status": "running",
   "startedAt": "2026-01-28T21:04:10.863Z",
-  "updatedAt": "2026-01-28T21:25:07.701Z",
-  "currentIteration": 4,
+  "updatedAt": "2026-01-28T21:28:20.714Z",
+  "currentIteration": 5,
   "maxIterations": 25,
-  "tasksCompleted": 4,
+  "tasksCompleted": 5,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -41,8 +41,8 @@
       {
         "id": "US-005",
         "title": "Poll GitHub for PR status updates",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-006",
@@ -152,6 +152,16 @@
       "durationMs": 510657,
       "startedAt": "2026-01-28T21:13:00.618Z",
       "endedAt": "2026-01-28T21:21:31.275Z"
+    },
+    {
+      "iteration": 5,
+      "status": "completed",
+      "taskId": "US-005",
+      "taskTitle": "Poll GitHub for PR status updates",
+      "taskCompleted": true,
+      "durationMs": 215213,
+      "startedAt": "2026-01-28T21:21:32.475Z",
+      "endedAt": "2026-01-28T21:25:07.688Z"
     }
   ],
   "skippedTaskIds": [],

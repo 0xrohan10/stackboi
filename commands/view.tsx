@@ -17,6 +17,7 @@ export type SyncStatus =
   | "needs-push"
   | "needs-rebase"
   | "conflicts"
+  | "pending-sync"
   | "unknown";
 
 // PR status from GitHub
@@ -37,6 +38,14 @@ export interface BranchInfo {
 export interface StackWithInfo {
   stack: Stack;
   branches: BranchInfo[];
+}
+
+// Notification for a merged PR
+export interface MergedPRNotification {
+  branchName: string;
+  prNumber: number;
+  childBranches: string[];
+  stackName: string;
 }
 
 // Box-drawing characters for tree
@@ -187,18 +196,40 @@ async function fetchAllPRStatuses(
   return result;
 }
 
-// Apply PR status updates to stacks
+// Apply PR status updates to stacks and detect newly merged PRs
 function applyPRStatusUpdates(
   stacks: StackWithInfo[],
   prStatuses: Map<string, { prNumber: number | null; prStatus: PRStatus }>
-): { updated: StackWithInfo[]; hasChanges: boolean } {
+): { updated: StackWithInfo[]; hasChanges: boolean; newlyMerged: MergedPRNotification[] } {
   let hasChanges = false;
+  const newlyMerged: MergedPRNotification[] = [];
+
   const updated = stacks.map((stackInfo) => ({
     ...stackInfo,
-    branches: stackInfo.branches.map((branch) => {
+    branches: stackInfo.branches.map((branch, branchIndex) => {
       const newStatus = prStatuses.get(branch.name);
       if (newStatus && (newStatus.prNumber !== branch.prNumber || newStatus.prStatus !== branch.prStatus)) {
         hasChanges = true;
+
+        // Detect newly merged PRs (was open/draft, now merged)
+        if (
+          newStatus.prStatus === "merged" &&
+          (branch.prStatus === "open" || branch.prStatus === "draft") &&
+          newStatus.prNumber !== null
+        ) {
+          // Find child branches (branches after this one in the stack)
+          const childBranches = stackInfo.branches
+            .slice(branchIndex + 1)
+            .map((b) => b.name);
+
+          newlyMerged.push({
+            branchName: branch.name,
+            prNumber: newStatus.prNumber,
+            childBranches,
+            stackName: stackInfo.stack.name,
+          });
+        }
+
         return {
           ...branch,
           prNumber: newStatus.prNumber,
@@ -208,7 +239,8 @@ function applyPRStatusUpdates(
       return branch;
     }),
   }));
-  return { updated, hasChanges };
+
+  return { updated, hasChanges, newlyMerged };
 }
 
 // Status indicator component
@@ -218,6 +250,7 @@ function StatusIndicator({ status }: { status: SyncStatus }) {
     "needs-push": { symbol: "↑", color: "yellow" },
     "needs-rebase": { symbol: "↓", color: "yellow" },
     conflicts: { symbol: "✗", color: "red" },
+    "pending-sync": { symbol: "⟲", color: "cyan" },
     unknown: { symbol: "?", color: "gray" },
   };
 
@@ -416,7 +449,74 @@ function TreeView({
         <Text color="yellow">↓</Text>
         <Text color="gray"> needs-rebase  </Text>
         <Text color="red">✗</Text>
-        <Text color="gray"> conflicts</Text>
+        <Text color="gray"> conflicts  </Text>
+        <Text color="cyan">⟲</Text>
+        <Text color="gray"> pending-sync</Text>
+      </Box>
+    </Box>
+  );
+}
+
+// Merge notification overlay component
+function MergeNotificationOverlay({
+  notification,
+  onSync,
+  onDismiss,
+}: {
+  notification: MergedPRNotification;
+  onSync: () => void;
+  onDismiss: () => void;
+}) {
+  useInput((input) => {
+    if (input.toLowerCase() === "y") {
+      onSync();
+    } else if (input.toLowerCase() === "n") {
+      onDismiss();
+    }
+  });
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor="cyan" padding={1}>
+      <Box marginBottom={1}>
+        <Text bold color="cyan">
+          🔀 PR Merged!
+        </Text>
+      </Box>
+
+      <Box marginBottom={1}>
+        <Text>
+          <Text color="magenta">#{notification.prNumber}</Text>
+          <Text> </Text>
+          <Text bold>{notification.branchName}</Text>
+          <Text color="gray"> in stack </Text>
+          <Text color="blue">{notification.stackName}</Text>
+          <Text color="gray"> was merged.</Text>
+        </Text>
+      </Box>
+
+      {notification.childBranches.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="gray">Affected child branches that need syncing:</Text>
+          {notification.childBranches.map((branch) => (
+            <Text key={branch} color="yellow">
+              {"  "}• {branch}
+            </Text>
+          ))}
+        </Box>
+      )}
+
+      {notification.childBranches.length === 0 && (
+        <Box marginBottom={1}>
+          <Text color="gray">No child branches need syncing.</Text>
+        </Box>
+      )}
+
+      <Box>
+        <Text bold>Sync now? </Text>
+        <Text color="green">[Y]</Text>
+        <Text>es / </Text>
+        <Text color="red">[N]</Text>
+        <Text>o</Text>
       </Box>
     </Box>
   );
@@ -451,6 +551,7 @@ function App() {
   const [ghAuthenticated, setGhAuthenticated] = useState(false);
   const [pollIntervalMs, setPollIntervalMs] = useState(DEFAULT_POLL_INTERVAL_MS);
   const [isPolling, setIsPolling] = useState(false);
+  const [mergeNotification, setMergeNotification] = useState<MergedPRNotification | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -488,9 +589,13 @@ function App() {
       setIsPolling(true);
       try {
         const prStatuses = await fetchAllPRStatuses(stacks, ghAuthenticated);
-        const { updated, hasChanges } = applyPRStatusUpdates(stacks, prStatuses);
+        const { updated, hasChanges, newlyMerged } = applyPRStatusUpdates(stacks, prStatuses);
         if (hasChanges) {
           setStacks(updated);
+        }
+        // Show notification for first newly merged PR (queue additional ones if needed)
+        if (newlyMerged.length > 0 && !mergeNotification) {
+          setMergeNotification(newlyMerged[0]!);
         }
       } catch {
         // Silently ignore polling errors - don't disrupt the UI
@@ -504,7 +609,7 @@ function App() {
     return () => {
       clearInterval(intervalId);
     };
-  }, [loading, ghAuthenticated, stacks, pollIntervalMs]);
+  }, [loading, ghAuthenticated, stacks, pollIntervalMs, mergeNotification]);
 
   const handleSelect = async (branchName: string) => {
     if (branchName === currentBranch) {
@@ -521,6 +626,33 @@ function App() {
     setCheckingOut(null);
   };
 
+  // Handle sync request from merge notification
+  const handleSync = () => {
+    // US-007 will implement actual sync operation
+    // For now, just dismiss the notification
+    // TODO: Trigger sync operation here
+    setMergeNotification(null);
+  };
+
+  // Handle dismissal of merge notification - mark child branches as pending-sync
+  const handleDismissMergeNotification = () => {
+    if (mergeNotification) {
+      // Mark child branches with pending-sync status
+      setStacks((prev) =>
+        prev.map((stackInfo) => ({
+          ...stackInfo,
+          branches: stackInfo.branches.map((branch) => {
+            if (mergeNotification.childBranches.includes(branch.name)) {
+              return { ...branch, syncStatus: "pending-sync" as SyncStatus };
+            }
+            return branch;
+          }),
+        }))
+      );
+    }
+    setMergeNotification(null);
+  };
+
   if (loading) {
     return <Loading />;
   }
@@ -534,6 +666,16 @@ function App() {
       <Box>
         <Text color="yellow">Checking out {checkingOut}...</Text>
       </Box>
+    );
+  }
+
+  if (mergeNotification) {
+    return (
+      <MergeNotificationOverlay
+        notification={mergeNotification}
+        onSync={handleSync}
+        onDismiss={handleDismissMergeNotification}
+      />
     );
   }
 
