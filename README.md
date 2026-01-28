@@ -128,4 +128,4 @@ This file is local to your machine and should be gitignored.
 
 ## License
 
-MIT
+GPL-3.0
