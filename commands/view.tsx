@@ -1206,16 +1206,20 @@ function TreeView({
   onSelect,
   onPush,
   onCreatePR,
+  onViewPR,
   isPolling,
   rerereStats,
+  viewPRError,
 }: {
   stacks: StackWithInfo[];
   currentBranch: string;
   onSelect: (branchName: string) => void;
   onPush: (stackIndex: number) => void;
   onCreatePR: (stackIndex: number, branchIndex: number) => void;
+  onViewPR: (stackIndex: number, branchIndex: number) => void;
   isPolling: boolean;
   rerereStats: RerereStats | null;
+  viewPRError: string | null;
 }) {
   const { exit } = useApp();
   const navItems = buildNavItems(stacks);
@@ -1248,6 +1252,12 @@ function TreeView({
       if (item) {
         onCreatePR(item.stackIndex, item.branchIndex);
       }
+    } else if (input === "v") {
+      // View PR in browser for the selected branch
+      const item = navItems[selectedIndex];
+      if (item) {
+        onViewPR(item.stackIndex, item.branchIndex);
+      }
     }
   });
 
@@ -1272,7 +1282,7 @@ function TreeView({
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text bold>Stack Tree View</Text>
-        <Text color="gray"> (↑↓/jk: navigate, Enter: checkout, c: create PR, p: push, q: quit)</Text>
+        <Text color="gray"> (↑↓/jk: navigate, Enter: checkout, c: create PR, v: view PR, p: push, q: quit)</Text>
         {isPolling && <Text color="gray"> ⟳</Text>}
       </Box>
 
@@ -1303,6 +1313,12 @@ function TreeView({
       <Box marginTop={1}>
         <RerereStatus stats={rerereStats} />
       </Box>
+
+      {viewPRError && (
+        <Box marginTop={1}>
+          <Text color="red">{viewPRError}</Text>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -1502,6 +1518,7 @@ function App() {
   const [pendingNotification, setPendingNotification] = useState<MergedPRNotification | null>(null);
   const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
   const [createPRProgress, setCreatePRProgress] = useState<CreatePRProgress | null>(null);
+  const [viewPRError, setViewPRError] = useState<string | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -1790,6 +1807,26 @@ function App() {
     }
   };
 
+  // Handle viewing PR in browser
+  const handleViewPR = async (stackIndex: number, branchIndex: number) => {
+    const stackInfo = stacks[stackIndex];
+    if (!stackInfo) return;
+
+    const branchInfo = stackInfo.branches[branchIndex];
+    if (!branchInfo) return;
+
+    // Check if branch has a PR
+    if (branchInfo.prStatus === "none" || branchInfo.prNumber === null) {
+      setViewPRError(`No PR exists for branch "${branchInfo.name}". Press 'c' to create one.`);
+      // Auto-dismiss after 3 seconds
+      setTimeout(() => setViewPRError(null), 3000);
+      return;
+    }
+
+    // Open PR in browser
+    await $`gh pr view ${branchInfo.name} --web`.quiet().nothrow();
+  };
+
   if (loading) {
     return <Loading />;
   }
@@ -1863,8 +1900,10 @@ function App() {
       onSelect={handleSelect}
       onPush={handlePush}
       onCreatePR={handleCreatePR}
+      onViewPR={handleViewPR}
       isPolling={isPolling}
       rerereStats={rerereStats}
+      viewPRError={viewPRError}
     />
   );
 }
