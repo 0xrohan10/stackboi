@@ -11,7 +11,14 @@ import {
   getRerereStats,
   DEFAULT_POLL_INTERVAL_MS,
 } from "./init";
-import { loadConfig, saveConfig, getCurrentBranch } from "./new";
+import { loadConfig, saveConfig, getCurrentBranch, findStackByBranch } from "./new";
+import {
+  createPR,
+  type CreatePRResult,
+  getParentBranch,
+  getStackPosition,
+  generateTitleFromBranchName,
+} from "./createpr";
 
 // Sync operation state
 export type SyncState =
@@ -30,6 +37,14 @@ export type PushState =
   | "success"
   | "error";
 
+// Create PR operation state
+export type CreatePRState =
+  | "idle"
+  | "confirm"
+  | "creating"
+  | "success"
+  | "error";
+
 export interface BranchPushResult {
   branchName: string;
   success: boolean;
@@ -44,6 +59,18 @@ export interface PushProgress {
   branches: string[];
   currentBranch: string | null;
   results: BranchPushResult[];
+}
+
+export interface CreatePRProgress {
+  state: CreatePRState;
+  branchName: string;
+  parentBranch: string;
+  suggestedTitle: string;
+  stackPosition: string;
+  message: string;
+  prNumber?: number;
+  prUrl?: string;
+  error?: string;
 }
 
 export interface SyncProgress {
@@ -877,6 +904,131 @@ function PushProgressWithDismiss({
   return <PushProgressOverlay progress={progress} />;
 }
 
+// Create PR confirmation/progress overlay component
+function CreatePROverlay({ progress }: { progress: CreatePRProgress }) {
+  const stateColors: Record<CreatePRState, string> = {
+    idle: "gray",
+    confirm: "cyan",
+    creating: "yellow",
+    success: "green",
+    error: "red",
+  };
+
+  const stateIcons: Record<CreatePRState, string> = {
+    idle: "",
+    confirm: "📝",
+    creating: "⏳",
+    success: "✅",
+    error: "❌",
+  };
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={stateColors[progress.state]} padding={1}>
+      <Box marginBottom={1}>
+        <Text bold color={stateColors[progress.state]}>
+          {stateIcons[progress.state]} Create Pull Request
+        </Text>
+      </Box>
+
+      {progress.state === "confirm" && (
+        <>
+          <Box flexDirection="column" marginBottom={1}>
+            <Box>
+              <Text color="gray">Branch: </Text>
+              <Text bold>{progress.branchName}</Text>
+            </Box>
+            <Box>
+              <Text color="gray">Base: </Text>
+              <Text>{progress.parentBranch}</Text>
+            </Box>
+            <Box>
+              <Text color="gray">Title: </Text>
+              <Text>{progress.suggestedTitle}</Text>
+            </Box>
+            <Box>
+              <Text color="gray">Position: </Text>
+              <Text color="magenta">{progress.stackPosition}</Text>
+            </Box>
+          </Box>
+
+          <Box marginTop={1}>
+            <Text bold>Create PR? </Text>
+            <Text color="green">[Y]</Text>
+            <Text>es / </Text>
+            <Text color="cyan">[D]</Text>
+            <Text>raft / </Text>
+            <Text color="red">[N]</Text>
+            <Text>o</Text>
+          </Box>
+        </>
+      )}
+
+      {progress.state === "creating" && (
+        <Box>
+          <Text color="yellow">{progress.message}</Text>
+        </Box>
+      )}
+
+      {progress.state === "success" && (
+        <>
+          <Box marginBottom={1}>
+            <Text color="green">{progress.message}</Text>
+          </Box>
+          <Box>
+            <Text color="gray">PR: </Text>
+            <Text color="green">#{progress.prNumber}</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color="gray">Press any key to continue...</Text>
+          </Box>
+        </>
+      )}
+
+      {progress.state === "error" && (
+        <>
+          <Box marginBottom={1}>
+            <Text color="red">{progress.error}</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color="gray">Press any key to continue...</Text>
+          </Box>
+        </>
+      )}
+    </Box>
+  );
+}
+
+// Create PR with input handling
+function CreatePRWithInput({
+  progress,
+  onConfirm,
+  onDraft,
+  onCancel,
+  onDismiss,
+}: {
+  progress: CreatePRProgress;
+  onConfirm: () => void;
+  onDraft: () => void;
+  onCancel: () => void;
+  onDismiss: () => void;
+}) {
+  useInput((input) => {
+    if (progress.state === "confirm") {
+      if (input.toLowerCase() === "y") {
+        onConfirm();
+      } else if (input.toLowerCase() === "d") {
+        onDraft();
+      } else if (input.toLowerCase() === "n") {
+        onCancel();
+      }
+    } else if (progress.state === "success" || progress.state === "error") {
+      onDismiss();
+    }
+  });
+
+  return <CreatePROverlay progress={progress} />;
+}
+
 // Status indicator component
 function StatusIndicator({ status }: { status: SyncStatus }) {
   const indicators: Record<SyncStatus, { symbol: string; color: string }> = {
@@ -1027,6 +1179,7 @@ function TreeView({
   currentBranch,
   onSelect,
   onPush,
+  onCreatePR,
   isPolling,
   rerereStats,
 }: {
@@ -1034,6 +1187,7 @@ function TreeView({
   currentBranch: string;
   onSelect: (branchName: string) => void;
   onPush: (stackIndex: number) => void;
+  onCreatePR: (stackIndex: number, branchIndex: number) => void;
   isPolling: boolean;
   rerereStats: RerereStats | null;
 }) {
@@ -1062,6 +1216,12 @@ function TreeView({
       if (item) {
         onPush(item.stackIndex);
       }
+    } else if (input === "c") {
+      // Create PR for the selected branch
+      const item = navItems[selectedIndex];
+      if (item) {
+        onCreatePR(item.stackIndex, item.branchIndex);
+      }
     }
   });
 
@@ -1086,7 +1246,7 @@ function TreeView({
     <Box flexDirection="column">
       <Box marginBottom={1}>
         <Text bold>Stack Tree View</Text>
-        <Text color="gray"> (↑↓/jk: navigate, Enter: checkout, p: push stack, q: quit)</Text>
+        <Text color="gray"> (↑↓/jk: navigate, Enter: checkout, c: create PR, p: push, q: quit)</Text>
         {isPolling && <Text color="gray"> ⟳</Text>}
       </Box>
 
@@ -1315,6 +1475,7 @@ function App() {
   const [conflictState, setConflictState] = useState<ConflictState | null>(null);
   const [pendingNotification, setPendingNotification] = useState<MergedPRNotification | null>(null);
   const [pushProgress, setPushProgress] = useState<PushProgress | null>(null);
+  const [createPRProgress, setCreatePRProgress] = useState<CreatePRProgress | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -1514,6 +1675,95 @@ function App() {
     }
   };
 
+  // Handle create PR request for a branch
+  const handleCreatePR = async (stackIndex: number, branchIndex: number) => {
+    const stackInfo = stacks[stackIndex];
+    if (!stackInfo) return;
+
+    const branchInfo = stackInfo.branches[branchIndex];
+    if (!branchInfo) return;
+
+    // Check if PR already exists
+    if (branchInfo.prNumber !== null) {
+      setCreatePRProgress({
+        state: "error",
+        branchName: branchInfo.name,
+        parentBranch: "",
+        suggestedTitle: "",
+        stackPosition: "",
+        message: "",
+        error: `PR already exists for branch '${branchInfo.name}': #${branchInfo.prNumber}`,
+      });
+      return;
+    }
+
+    // Get parent branch and suggested title
+    const parentBranch = getParentBranch(stackInfo.stack, branchInfo.name);
+    const { position, total } = getStackPosition(stackInfo.stack, branchInfo.name);
+    const suggestedTitle = generateTitleFromBranchName(branchInfo.name);
+
+    // Show confirmation dialog
+    setCreatePRProgress({
+      state: "confirm",
+      branchName: branchInfo.name,
+      parentBranch,
+      suggestedTitle,
+      stackPosition: `${position}/${total}`,
+      message: "",
+    });
+  };
+
+  // Handle PR creation confirmation
+  const handleCreatePRConfirm = async (draft: boolean) => {
+    if (!createPRProgress) return;
+
+    const branchName = createPRProgress.branchName;
+
+    setCreatePRProgress({
+      ...createPRProgress,
+      state: "creating",
+      message: "Creating pull request...",
+    });
+
+    const result = await createPR({ branchName, draft });
+
+    if (result.success) {
+      setCreatePRProgress({
+        ...createPRProgress,
+        state: "success",
+        message: "Pull request created successfully!",
+        prNumber: result.prNumber,
+        prUrl: result.prUrl,
+      });
+    } else {
+      setCreatePRProgress({
+        ...createPRProgress,
+        state: "error",
+        error: result.error || "Failed to create PR",
+      });
+    }
+  };
+
+  // Handle PR creation cancellation
+  const handleCreatePRCancel = () => {
+    setCreatePRProgress(null);
+  };
+
+  // Handle dismissal of create PR overlay
+  const handleCreatePRDismiss = async () => {
+    setCreatePRProgress(null);
+
+    // Reload stacks to update PR status
+    try {
+      const gitRoot = await getGitRoot();
+      const config = await loadConfig(gitRoot);
+      const updatedStacks = await getStacksWithInfo(config, ghAuthenticated);
+      setStacks(updatedStacks);
+    } catch {
+      // Ignore errors during reload
+    }
+  };
+
   if (loading) {
     return <Loading />;
   }
@@ -1548,6 +1798,18 @@ function App() {
     );
   }
 
+  if (createPRProgress) {
+    return (
+      <CreatePRWithInput
+        progress={createPRProgress}
+        onConfirm={() => handleCreatePRConfirm(false)}
+        onDraft={() => handleCreatePRConfirm(true)}
+        onCancel={handleCreatePRCancel}
+        onDismiss={handleCreatePRDismiss}
+      />
+    );
+  }
+
   if (mergeNotification) {
     return (
       <MergeNotificationOverlay
@@ -1574,6 +1836,7 @@ function App() {
       currentBranch={currentBranch}
       onSelect={handleSelect}
       onPush={handlePush}
+      onCreatePR={handleCreatePR}
       isPolling={isPolling}
       rerereStats={rerereStats}
     />
