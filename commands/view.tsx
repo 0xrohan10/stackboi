@@ -9,7 +9,24 @@ import {
   checkGhAuth,
   DEFAULT_POLL_INTERVAL_MS,
 } from "./init";
-import { loadConfig, getCurrentBranch } from "./new";
+import { loadConfig, saveConfig, getCurrentBranch } from "./new";
+
+// Sync operation state
+export type SyncState =
+  | "idle"
+  | "fetching"
+  | "rebasing"
+  | "success"
+  | "error";
+
+export interface SyncProgress {
+  state: SyncState;
+  message: string;
+  mergedBranch: string;
+  childBranches: string[];
+  currentBranch: string | null;
+  error: string | null;
+}
 
 // Sync status for a branch
 export type SyncStatus =
@@ -241,6 +258,231 @@ function applyPRStatusUpdates(
   }));
 
   return { updated, hasChanges, newlyMerged };
+}
+
+// Perform sync operation: fetch, rebase with --update-refs, and update metadata
+export async function performSync(
+  notification: MergedPRNotification,
+  onProgress: (progress: SyncProgress) => void
+): Promise<{ success: boolean; error?: string }> {
+  const { branchName: mergedBranch, childBranches, stackName } = notification;
+
+  // Initial progress
+  onProgress({
+    state: "fetching",
+    message: "Fetching latest from remote...",
+    mergedBranch,
+    childBranches,
+    currentBranch: null,
+    error: null,
+  });
+
+  // Step 1: Fetch latest from remote
+  const fetchResult = await $`git fetch origin`.quiet().nothrow();
+  if (fetchResult.exitCode !== 0) {
+    const error = `Failed to fetch from remote: ${fetchResult.stderr.toString()}`;
+    onProgress({
+      state: "error",
+      message: error,
+      mergedBranch,
+      childBranches,
+      currentBranch: null,
+      error,
+    });
+    return { success: false, error };
+  }
+
+  // Step 2: Get the git root and load config
+  const gitRoot = await getGitRoot();
+  const config = await loadConfig(gitRoot);
+
+  // Find the stack containing the merged branch
+  const stackInfo = config.stacks.find((s) => s.name === stackName);
+  if (!stackInfo) {
+    const error = `Stack '${stackName}' not found in config`;
+    onProgress({
+      state: "error",
+      message: error,
+      mergedBranch,
+      childBranches,
+      currentBranch: null,
+      error,
+    });
+    return { success: false, error };
+  }
+
+  // Step 3: If there are child branches, rebase them with --update-refs
+  if (childBranches.length > 0) {
+    // Get the first child branch (the one directly after the merged branch)
+    const firstChildBranch = childBranches[0]!;
+
+    // The tip branch is the last branch in the child list (furthest from base)
+    const tipBranch = childBranches[childBranches.length - 1]!;
+
+    onProgress({
+      state: "rebasing",
+      message: `Rebasing child branches onto ${stackInfo.baseBranch}...`,
+      mergedBranch,
+      childBranches,
+      currentBranch: firstChildBranch,
+      error: null,
+    });
+
+    // Save current branch to return to later
+    const currentBranchResult = await $`git branch --show-current`.quiet();
+    const originalBranch = currentBranchResult.stdout.toString().trim();
+
+    // Checkout the tip branch for rebasing
+    const checkoutResult = await $`git checkout ${tipBranch}`.quiet().nothrow();
+    if (checkoutResult.exitCode !== 0) {
+      const error = `Failed to checkout ${tipBranch}: ${checkoutResult.stderr.toString()}`;
+      onProgress({
+        state: "error",
+        message: error,
+        mergedBranch,
+        childBranches,
+        currentBranch: tipBranch,
+        error,
+      });
+      return { success: false, error };
+    }
+
+    // Perform rebase with --update-refs
+    // This rebases onto the base branch (since merged branch is now part of base)
+    // --update-refs automatically updates all intermediate branch pointers
+    const rebaseResult =
+      await $`git rebase --update-refs origin/${stackInfo.baseBranch}`.quiet().nothrow();
+
+    if (rebaseResult.exitCode !== 0) {
+      // Check if it's a conflict
+      const stderr = rebaseResult.stderr.toString();
+      const isConflict = stderr.includes("CONFLICT") || stderr.includes("could not apply");
+
+      if (isConflict) {
+        // Abort the rebase so user is not left in conflicted state
+        await $`git rebase --abort`.quiet().nothrow();
+        const error = "Rebase failed due to conflicts. Please resolve manually.";
+        onProgress({
+          state: "error",
+          message: error,
+          mergedBranch,
+          childBranches,
+          currentBranch: tipBranch,
+          error,
+        });
+        // Return to original branch
+        await $`git checkout ${originalBranch}`.quiet().nothrow();
+        return { success: false, error };
+      }
+
+      const error = `Rebase failed: ${stderr}`;
+      onProgress({
+        state: "error",
+        message: error,
+        mergedBranch,
+        childBranches,
+        currentBranch: tipBranch,
+        error,
+      });
+      // Try to abort and return to original branch
+      await $`git rebase --abort`.quiet().nothrow();
+      await $`git checkout ${originalBranch}`.quiet().nothrow();
+      return { success: false, error };
+    }
+
+    // Return to original branch if it still exists
+    if (originalBranch && originalBranch !== mergedBranch) {
+      await $`git checkout ${originalBranch}`.quiet().nothrow();
+    } else {
+      // If we were on the merged branch, switch to the first child
+      await $`git checkout ${firstChildBranch}`.quiet().nothrow();
+    }
+  }
+
+  // Step 4: Remove merged branch from stack metadata
+  const mergedBranchIndex = stackInfo.branches.indexOf(mergedBranch);
+  if (mergedBranchIndex !== -1) {
+    stackInfo.branches.splice(mergedBranchIndex, 1);
+    await saveConfig(gitRoot, config);
+  }
+
+  // Step 5: Delete the local merged branch (optional but good cleanup)
+  await $`git branch -d ${mergedBranch}`.quiet().nothrow();
+
+  onProgress({
+    state: "success",
+    message: "Sync completed successfully!",
+    mergedBranch,
+    childBranches,
+    currentBranch: null,
+    error: null,
+  });
+
+  return { success: true };
+}
+
+// Sync progress overlay component
+function SyncProgressOverlay({ progress }: { progress: SyncProgress }) {
+  const stateIcons: Record<SyncState, string> = {
+    idle: "",
+    fetching: "📥",
+    rebasing: "🔄",
+    success: "✅",
+    error: "❌",
+  };
+
+  const stateColors: Record<SyncState, string> = {
+    idle: "gray",
+    fetching: "cyan",
+    rebasing: "yellow",
+    success: "green",
+    error: "red",
+  };
+
+  return (
+    <Box flexDirection="column" borderStyle="round" borderColor={stateColors[progress.state]} padding={1}>
+      <Box marginBottom={1}>
+        <Text bold color={stateColors[progress.state]}>
+          {stateIcons[progress.state]} Syncing Stack
+        </Text>
+      </Box>
+
+      <Box marginBottom={1}>
+        <Text>{progress.message}</Text>
+      </Box>
+
+      {progress.state === "rebasing" && progress.childBranches.length > 0 && (
+        <Box flexDirection="column" marginBottom={1}>
+          <Text color="gray">Rebasing branches:</Text>
+          {progress.childBranches.map((branch) => (
+            <Text key={branch} color={branch === progress.currentBranch ? "yellow" : "gray"}>
+              {"  "}{branch === progress.currentBranch ? "→ " : "  "}{branch}
+            </Text>
+          ))}
+        </Box>
+      )}
+
+      {progress.state === "success" && (
+        <Box>
+          <Text color="green">
+            Removed <Text bold>{progress.mergedBranch}</Text> from stack.
+          </Text>
+        </Box>
+      )}
+
+      {progress.state === "error" && progress.error && (
+        <Box marginTop={1}>
+          <Text color="red">{progress.error}</Text>
+        </Box>
+      )}
+
+      {(progress.state === "success" || progress.state === "error") && (
+        <Box marginTop={1}>
+          <Text color="gray">Press any key to continue...</Text>
+        </Box>
+      )}
+    </Box>
+  );
 }
 
 // Status indicator component
@@ -540,6 +782,23 @@ function ErrorDisplay({ message }: { message: string }) {
   );
 }
 
+// Sync progress dismiss handler component
+function SyncProgressWithDismiss({
+  progress,
+  onDismiss,
+}: {
+  progress: SyncProgress;
+  onDismiss: () => void;
+}) {
+  useInput(() => {
+    if (progress.state === "success" || progress.state === "error") {
+      onDismiss();
+    }
+  });
+
+  return <SyncProgressOverlay progress={progress} />;
+}
+
 // Main app component
 function App() {
   const { exit } = useApp();
@@ -552,6 +811,7 @@ function App() {
   const [pollIntervalMs, setPollIntervalMs] = useState(DEFAULT_POLL_INTERVAL_MS);
   const [isPolling, setIsPolling] = useState(false);
   const [mergeNotification, setMergeNotification] = useState<MergedPRNotification | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
 
   // Initial load
   useEffect(() => {
@@ -627,11 +887,36 @@ function App() {
   };
 
   // Handle sync request from merge notification
-  const handleSync = () => {
-    // US-007 will implement actual sync operation
-    // For now, just dismiss the notification
-    // TODO: Trigger sync operation here
+  const handleSync = async () => {
+    if (!mergeNotification) return;
+
+    const notification = mergeNotification;
     setMergeNotification(null);
+
+    // Start the sync operation
+    await performSync(notification, (progress) => {
+      setSyncProgress(progress);
+    });
+  };
+
+  // Handle dismissal of sync progress overlay
+  const handleSyncProgressDismiss = async () => {
+    const progress = syncProgress;
+    setSyncProgress(null);
+
+    // Reload stacks after successful sync
+    if (progress?.state === "success") {
+      try {
+        const gitRoot = await getGitRoot();
+        const config = await loadConfig(gitRoot);
+        const updatedStacks = await getStacksWithInfo(config, ghAuthenticated);
+        setStacks(updatedStacks);
+        const branch = await getCurrentBranch();
+        setCurrentBranch(branch);
+      } catch {
+        // Ignore errors during reload
+      }
+    }
   };
 
   // Handle dismissal of merge notification - mark child branches as pending-sync
@@ -666,6 +951,15 @@ function App() {
       <Box>
         <Text color="yellow">Checking out {checkingOut}...</Text>
       </Box>
+    );
+  }
+
+  if (syncProgress) {
+    return (
+      <SyncProgressWithDismiss
+        progress={syncProgress}
+        onDismiss={handleSyncProgressDismiss}
+      />
     );
   }
 

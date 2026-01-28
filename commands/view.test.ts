@@ -1,6 +1,6 @@
 import { test, expect, describe } from "bun:test";
 import type { StackboiConfig, Stack } from "./init";
-import type { BranchInfo, StackWithInfo, SyncStatus, PRStatus } from "./view";
+import type { BranchInfo, StackWithInfo, SyncStatus, PRStatus, SyncState, SyncProgress, MergedPRNotification } from "./view";
 
 describe("view", () => {
   const createMockConfig = (stacks: Stack[]): StackboiConfig => ({
@@ -48,13 +48,106 @@ describe("view", () => {
         "needs-push",
         "needs-rebase",
         "conflicts",
+        "pending-sync",
         "unknown",
       ];
 
-      expect(statuses).toHaveLength(5);
+      expect(statuses).toHaveLength(6);
       statuses.forEach((status) => {
         expect(typeof status).toBe("string");
       });
+    });
+  });
+
+  describe("SyncState types", () => {
+    test("all sync states are valid", () => {
+      const states: SyncState[] = [
+        "idle",
+        "fetching",
+        "rebasing",
+        "success",
+        "error",
+      ];
+
+      expect(states).toHaveLength(5);
+      states.forEach((state) => {
+        expect(typeof state).toBe("string");
+      });
+    });
+  });
+
+  describe("SyncProgress structure", () => {
+    test("sync progress includes all required fields", () => {
+      const progress: SyncProgress = {
+        state: "rebasing",
+        message: "Rebasing child branches...",
+        mergedBranch: "feature-1",
+        childBranches: ["feature-2", "feature-3"],
+        currentBranch: "feature-2",
+        error: null,
+      };
+
+      expect(progress.state).toBe("rebasing");
+      expect(progress.message).toBe("Rebasing child branches...");
+      expect(progress.mergedBranch).toBe("feature-1");
+      expect(progress.childBranches).toHaveLength(2);
+      expect(progress.currentBranch).toBe("feature-2");
+      expect(progress.error).toBeNull();
+    });
+
+    test("sync progress can have error state", () => {
+      const progress: SyncProgress = {
+        state: "error",
+        message: "Rebase failed",
+        mergedBranch: "feature-1",
+        childBranches: ["feature-2"],
+        currentBranch: "feature-2",
+        error: "Conflicts detected",
+      };
+
+      expect(progress.state).toBe("error");
+      expect(progress.error).toBe("Conflicts detected");
+    });
+
+    test("sync progress success state", () => {
+      const progress: SyncProgress = {
+        state: "success",
+        message: "Sync completed successfully!",
+        mergedBranch: "feature-1",
+        childBranches: ["feature-2"],
+        currentBranch: null,
+        error: null,
+      };
+
+      expect(progress.state).toBe("success");
+      expect(progress.currentBranch).toBeNull();
+    });
+  });
+
+  describe("MergedPRNotification structure", () => {
+    test("notification includes all required fields", () => {
+      const notification: MergedPRNotification = {
+        branchName: "feature-1",
+        prNumber: 123,
+        childBranches: ["feature-2", "feature-3"],
+        stackName: "stack-feature",
+      };
+
+      expect(notification.branchName).toBe("feature-1");
+      expect(notification.prNumber).toBe(123);
+      expect(notification.childBranches).toHaveLength(2);
+      expect(notification.stackName).toBe("stack-feature");
+    });
+
+    test("notification can have no child branches", () => {
+      const notification: MergedPRNotification = {
+        branchName: "feature-last",
+        prNumber: 456,
+        childBranches: [],
+        stackName: "stack-feature",
+      };
+
+      expect(notification.childBranches).toHaveLength(0);
     });
   });
 

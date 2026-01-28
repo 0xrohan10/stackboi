@@ -3,10 +3,10 @@
   "sessionId": "a151e077-4d21-4efb-ad9d-a5f3d204010f",
   "status": "running",
   "startedAt": "2026-01-28T21:04:10.863Z",
-  "updatedAt": "2026-01-28T21:28:20.714Z",
-  "currentIteration": 5,
+  "updatedAt": "2026-01-28T21:31:51.253Z",
+  "currentIteration": 6,
   "maxIterations": 25,
-  "tasksCompleted": 5,
+  "tasksCompleted": 6,
   "isPaused": false,
   "agentPlugin": "claude",
   "trackerState": {
@@ -47,8 +47,8 @@
       {
         "id": "US-006",
         "title": "Prompt sync on merge detection",
-        "status": "open",
-        "completedInSession": false
+        "status": "completed",
+        "completedInSession": true
       },
       {
         "id": "US-007",
@@ -162,6 +162,16 @@
       "durationMs": 215213,
       "startedAt": "2026-01-28T21:21:32.475Z",
       "endedAt": "2026-01-28T21:25:07.688Z"
+    },
+    {
+      "iteration": 6,
+      "status": "completed",
+      "taskId": "US-006",
+      "taskTitle": "Prompt sync on merge detection",
+      "taskCompleted": true,
+      "durationMs": 191806,
+      "startedAt": "2026-01-28T21:25:08.898Z",
+      "endedAt": "2026-01-28T21:28:20.704Z"
     }
   ],
   "skippedTaskIds": [],
