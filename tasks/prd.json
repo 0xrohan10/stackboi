@@ -65,10 +65,11 @@
         "Keyboard navigation: arrow keys to move, enter to select"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "dependsOn": [
         "US-002"
-      ]
+      ],
+      "completionNotes": "Completed by agent"
     },
     {
       "id": "US-005",
@@ -274,6 +275,6 @@
     }
   ],
   "metadata": {
-    "updatedAt": "2026-01-28T21:12:59.415Z"
+    "updatedAt": "2026-01-28T21:21:31.278Z"
   }
 }
