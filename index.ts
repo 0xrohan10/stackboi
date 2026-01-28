@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 
 import { init } from "./commands/init";
 import { newStack } from "./commands/new";

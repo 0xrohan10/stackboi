@@ -1,0 +1,15 @@
+{
+  "name": "@stackboi/linux-x64",
+  "version": "0.1.0",
+  "description": "stackboi binary for linux-x64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stackboi/stackboi"
+  },
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "bin": {
+    "stackboi": "./stackboi"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@stackboi/darwin-arm64",
+  "version": "0.1.0",
+  "description": "stackboi binary for darwin-arm64",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stackboi/stackboi"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "bin": {
+    "stackboi": "./stackboi"
+  }
+}
