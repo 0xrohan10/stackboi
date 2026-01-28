@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "A stacked branch workflow tool",
   "bin": {
-    "stackboi": "./dist/cli.js"
+    "sb": "./dist/cli.js"
   },
   "files": [
     "dist"

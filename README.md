@@ -16,48 +16,55 @@ Stacked PRs let you split large features into small, reviewable chunks that buil
 
 - Git 2.38+ (for `--update-refs`)
 - [GitHub CLI](https://cli.github.com/) (`gh`) authenticated
-- [Bun](https://bun.sh/)
 
 ## Installation
 
+Install globally with npm:
+
 ```bash
-git clone https://github.com/your-username/stackboi.git
-cd stackboi
-bun install
+npm install -g stackboi
 ```
+
+Or with Bun:
+
+```bash
+bun install -g stackboi
+```
+
+This installs platform-specific native binaries for optimal performance.
 
 ## Quick Start
 
 ```bash
 # Initialize in your repo
-bun run index.ts init
+sb init
 
 # Start a new stack from main
 git checkout main
-bun run index.ts new feature/auth-base
+sb new feature/auth-base
 
 # Add branches to the stack
-bun run index.ts add feature/auth-login
-bun run index.ts add feature/auth-logout
+sb add feature/auth-login
+sb add feature/auth-logout
 
 # Create PRs for each branch
-bun run index.ts pr feature/auth-base
-bun run index.ts pr feature/auth-login
-bun run index.ts pr feature/auth-logout
+sb pr feature/auth-base
+sb pr feature/auth-login
+sb pr feature/auth-logout
 
 # Open the interactive view
-bun run index.ts view
+sb view
 ```
 
 ## Commands
 
-| Command        | Description                               |
-| -------------- | ----------------------------------------- |
-| `init`         | Initialize stackboi in the current repo   |
-| `new <branch>` | Create a new stack with an initial branch |
-| `add <branch>` | Add a branch to the current stack         |
-| `view`         | Open interactive tree view                |
-| `pr <branch>`  | Create a GitHub PR for a branch           |
+| Command           | Description                               |
+| ----------------- | ----------------------------------------- |
+| `sb init`         | Initialize stackboi in the current repo   |
+| `sb new <branch>` | Create a new stack with an initial branch |
+| `sb add <branch>` | Add a branch to the current stack         |
+| `sb view`         | Open interactive tree view                |
+| `sb pr <branch>`  | Create a GitHub PR for a branch           |
 
 ## How It Works
 
