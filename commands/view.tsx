@@ -1617,7 +1617,6 @@ function App() {
 
     const notification = mergeNotification
     setMergeNotification(null)
-    setPendingNotification(notification)
 
     // Start the sync operation
     const result = await performSync(
@@ -1689,7 +1688,6 @@ function App() {
     await $`git rebase --abort`.quiet().nothrow()
     await $`git checkout ${conflictState.originalBranch}`.quiet().nothrow()
     setConflictState(null)
-    setPendingNotification(null)
 
     // Reload current branch
     const branch = await getCurrentBranch()

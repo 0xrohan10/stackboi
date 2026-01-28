@@ -37,7 +37,8 @@
     "lint:fix": "oxlint --fix .",
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
-    "check": "bun run lint && bun run format:check"
+    "typecheck": "tsc --noEmit",
+    "check": "bun run lint && bun run format:check && bun run typecheck"
   },
   "dependencies": {
     "@effect/cli": "^0.73.1",

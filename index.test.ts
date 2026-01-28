@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'bun:test'
 import { $ } from 'bun'
+import pkg from './package.json'
 
 describe('CLI integration', () => {
   test('--help shows usage', async () => {
@@ -15,7 +16,7 @@ describe('CLI integration', () => {
 
   test('--version shows version', async () => {
     const result = await $`bun index.ts --version`.quiet()
-    expect(result.stdout.toString()).toContain('0.1.0')
+    expect(result.stdout.toString()).toContain(pkg.version)
   })
 
   test('new --help shows branch argument', async () => {

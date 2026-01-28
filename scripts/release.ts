@@ -20,7 +20,7 @@ function parseVersion(version: string): [number, number, number] {
   if (!match) {
     throw new Error(`Invalid version format: ${version}`)
   }
-  return [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])]
+  return [parseInt(match[1]!), parseInt(match[2]!), parseInt(match[3]!)]
 }
 
 function bumpVersion(version: string, bump: BumpType): string {
