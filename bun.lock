@@ -20,11 +20,11 @@
         "react-devtools-core": "^7.0.1",
       },
       "optionalDependencies": {
-        "@stackboi/darwin-arm64": "0.1.0",
-        "@stackboi/darwin-x64": "0.1.0",
-        "@stackboi/linux-arm64": "0.1.0",
-        "@stackboi/linux-x64": "0.1.0",
-        "@stackboi/win32-x64": "0.1.0",
+        "@0xrohan10/stackboi-darwin-arm64": "0.1.8",
+        "@0xrohan10/stackboi-darwin-x64": "0.1.8",
+        "@0xrohan10/stackboi-linux-arm64": "0.1.8",
+        "@0xrohan10/stackboi-linux-x64": "0.1.8",
+        "@0xrohan10/stackboi-win32-x64": "0.1.8",
       },
       "peerDependencies": {
         "typescript": "^5",
@@ -32,6 +32,16 @@
     },
   },
   "packages": {
+    "@0xrohan10/stackboi-darwin-arm64": ["@0xrohan10/stackboi-darwin-arm64@0.1.8", "", { "os": "darwin", "cpu": "arm64" }, "sha512-Nf4KScT+/sXX9Qtd+l33cf2dXu+7tmpROdINoNi4+fykqVR/8kN+zLEH/V8MvLogUyjowuV37zKjDbQy6c+Ypg=="],
+
+    "@0xrohan10/stackboi-darwin-x64": ["@0xrohan10/stackboi-darwin-x64@0.1.8", "", { "os": "darwin", "cpu": "x64" }, "sha512-45/yUkxN2dNjJpyg7BWje0aM+7SqjptfOrRvnvAj2QUY7tFlkxs+UdKqt8UH4DbRq6QQsr6wZW1pBHV7MNpvhQ=="],
+
+    "@0xrohan10/stackboi-linux-arm64": ["@0xrohan10/stackboi-linux-arm64@0.1.8", "", { "os": "linux", "cpu": "arm64" }, "sha512-bqJiGKN8X1d1OoWvxafE5NGH8bb+AN9XHC0j+EtLUVLvhpt7vWHB1eNnm44bHKKR3T/c5bjCBfWtf+i+O8ghVw=="],
+
+    "@0xrohan10/stackboi-linux-x64": ["@0xrohan10/stackboi-linux-x64@0.1.8", "", { "os": "linux", "cpu": "x64" }, "sha512-9ZMQuhjj9f3NG6WCZqQf30lALVgDyh37IYAFCLXagbD5fqO9T8JMphuD8VAZEfe+b+IES2l0A6/x6MViRE4iGA=="],
+
+    "@0xrohan10/stackboi-win32-x64": ["@0xrohan10/stackboi-win32-x64@0.1.8", "", { "os": "win32", "cpu": "x64" }, "sha512-4X3B6R5DOsoqmMLxGlDYumMwJj+szn9LjK74PxG65mCYrY42+DpXgjqAiUKdOi5alJ/Gw0MHAyiCQDDj4s88CA=="],
+
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.2.3", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }, "sha512-jsElTJ0sQ4wHRz+C45tfect76BwbTbgkgKByOzpCN9xG61N5V6u/glvg1CsNJhq2xJIFpKHSwG3D2wPPuEYOrQ=="],
 
     "@effect/cli": ["@effect/cli@0.73.1", "", { "dependencies": { "ini": "^4.1.3", "toml": "^3.0.0", "yaml": "^2.5.0" }, "peerDependencies": { "@effect/platform": "^0.94.2", "@effect/printer": "^0.47.0", "@effect/printer-ansi": "^0.47.0", "effect": "^3.19.15" } }, "sha512-lKDNq1Dwb+f1aPbse+EPORbNhQSJvefkEeFiIdWQJB4YX/D/9cibGGA1rb4A1PHn8qJhrE376DG3d0TlszxR+w=="],
